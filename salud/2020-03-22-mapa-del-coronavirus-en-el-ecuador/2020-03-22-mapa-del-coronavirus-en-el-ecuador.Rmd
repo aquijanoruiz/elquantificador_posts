@@ -10,7 +10,7 @@ tags:
   - Mapas
 ---
 
-El código utilizado para hacer este mapa está acualizado al martes, 24 de marzo de 2020. Si no encuentras disponible la última actualización, por favor escríbenos a info@elquantificador.com para actualizar este contenido. Muchas gracias.
+El código utilizado para hacer este mapa está acualizado al martes, 24 de marzo de 2020. Si no encuentras disponible la última actualización, por favor escríbenos a info@elquantificador.com. Muchas gracias.
 
 ```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
 # --------- these are the packages used to create the map ---------
