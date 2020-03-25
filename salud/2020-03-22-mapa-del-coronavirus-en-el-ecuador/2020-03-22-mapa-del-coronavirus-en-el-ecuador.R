@@ -1,4 +1,4 @@
-
+# --------- these are the packages used to create the map ---------
 library(RCurl)
 library(tidyverse)
 library(sf)
@@ -6,11 +6,18 @@ library(rmapshaper)
 library(tmap)
 library(leaflet)
 
-# The coronavirus data ----
-url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/covid19_confirmed.csv"
-confirmed <- read_csv(url) # Now we have loaded the coronavirus file
+# --------- Download the shapefile and the coronavirus csv data from github ---------
+# The coronavirus data by province and cantons ----
 
-# Ecuador's political division (*.shp) data ----
+url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/confirmed_canton.csv"
+confirmed_c <- read_csv(url) # Now we have loaded the confirmed cases by canton
+
+url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/confirmed_provincia.csv"
+confirmed_p <- read_csv(url) # Now we have loaded the confirmed cases by province
+
+# Ecuador's administrative division (*.shp) data ----
+
+# Now, we need to load Ecuador's administrative division by province
 url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_adm1.zip"
 td <- tempdir() # We create a temporary directory
 tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
@@ -26,45 +33,94 @@ prf.fine.name <- unzip(tf, list=TRUE)$Name[10] # The prf file name
 unzip(tf, files=c(shp.file.name, shx.file.name, dbf.fine.name, prf.fine.name), exdir=td, overwrite=TRUE)
 shp.file.path <- file.path(td, shp.file.name)
 
-ecu_map <- st_read(shp.file.path) # Now we have loaded the shapefile
+ecu_map_p <- st_read(shp.file.path) # Now we have loaded the shapefile
+ecu_map_p
 
-ecu_map <- ms_simplify(ecu_map, keep=0.01) # We keep the 0.4% of the polygon
+# We first need to load Ecuador's administrative division by canton
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_adm2.zip"
+td <- tempdir() # We create a temporary directory
+tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
+download.file(url,tf) # We download the data into the placeholder file
+
+# We get the name of the file inside the zip file that contains the demographic and economic data, 
+# unzip it, get the full path name of it, and finally load it
+shp.file.name <- unzip(tf, list=TRUE)$Name[9] # The shp file name
+shx.file.name <- unzip(tf, list=TRUE)$Name[11] # The shx file name
+dbf.fine.name <- unzip(tf, list=TRUE)$Name[5] # The dbf file name
+prf.fine.name <- unzip(tf, list=TRUE)$Name[7] # The prf file name
+
+unzip(tf, files=c(shp.file.name, shx.file.name, dbf.fine.name, prf.fine.name), exdir=td, overwrite=TRUE)
+shp.file.path <- file.path(td, shp.file.name)
+
+ecu_map_c <- st_read(shp.file.path) # Now we have loaded the shapefile
+ecu_map_c
+
+# --------- preparing province map ---------
+# We simplify the data
+ecu_map_p <- ms_simplify(ecu_map_p, keep=0.01) # We keep the 0.4% of the polygon
 
 # We keep only the variables we need
-ecu_map <- ecu_map %>% select(-c(ID_0, ISO, NAME_0, ID_1, TYPE_1, ENGTYPE_1, NL_NAME_1, VARNAME_1)) %>%
-  rename(Provincia = NAME_1) # We only keep the province names and the geometry
+ecu_map_p <- ecu_map_p %>% select(-c(ID_0, ISO, NAME_0, ID_1, TYPE_1, ENGTYPE_1, NL_NAME_1, VARNAME_1)) %>%
+  rename(Provincia = NAME_1)
 
-# --------- preparing the coronavirus data ---------
+# --------- preparing canton map ---------
+# We simplify the data
+ecu_map_c <- ms_simplify(ecu_map_c, keep=0.01) # We keep the 0.4% of the polygon
+
+# We keep only the variables we need
+ecu_map_c <- ecu_map_c %>% select(-c(ID_0, ISO, NAME_0, NAME_1, ID_1, ID_2, TYPE_2, ENGTYPE_2, NL_NAME_2, VARNAME_2)) %>%
+  rename(Cant??n = NAME_2) # We only keep the province names and the geometry
+
+# --------- preparing coronavirus data ---------
+# The canton data
+confirmed_c <- read_csv("confirmed_canton.csv")
+
 # We need to transform the data from wide to long
-confirmed <- confirmed %>% gather(Fecha, Casos, -Provincia) %>% 
+confirmed_c <- confirmed_c %>% select(-Provincia) %>% gather(Fecha, Casos, -Cant??n) %>% 
   mutate(Fecha = as.Date(Fecha, format = "%m/%d/%Y")) %>%
-  filter(Fecha >= as.Date("2020-03-05")) %>% # We only have data by province from May 5th
+  filter(Fecha >= as.Date("2020-03-16")) %>% # We only have data by province from May 16th (this is the date where we started to collect data)
   replace_na(list(Casos = 0))
 
+confirmed_c$Cant??n <- factor(confirmed_c$Cant??n, levels = levels(ecu_map_c$Cant??n))
 
-confirmed$Provincia <- factor(confirmed$Provincia, levels = levels(ecu_map$Provincia)) # We want to keep the same levels between the two sets
+# The province data
+confirmed_p <- read_csv("confirmed_provincia.csv")
+
+# We need to transform the data from wide to long
+confirmed_p <- confirmed_p %>% gather(Fecha, Casos, -Provincia) %>% 
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%Y")) %>%
+  filter(Fecha >= as.Date("2020-03-16")) %>% # We only have data by province from May 16th
+  replace_na(list(Casos = 0))
+
+confirmed_p$Provincia <- factor(confirmed_p$Provincia, levels = levels(ecu_map_p$Provincia))
 
 # --------- merging the st data with the coronavirus data ---------
-centroid <- st_centroid(ecu_map)
+centroid <- st_centroid(ecu_map_p)
 centroid[23,] # We use Tungurahua province as the center of our map 
 
-covid19_confirmed <- inner_join(ecu_map, confirmed, by = "Provincia") # We merge the map data with the coronavirus data
+today <- "2020-03-24"
 
-# We filter the date we want and take out the date column
-today <- "2020-03-23" # We set the date we want the map to illustrate
-covid19_confirmed_today <- covid19_confirmed %>% filter(Fecha == today) %>% select(-Fecha)
+# The canton data
+covid19_confirmed_c <- inner_join(ecu_map_c, confirmed_c, by = "Cant??n") # We merge the map data with the coronavirus data
+covid19_confirmed_c <- covid19_confirmed_c %>% filter(Fecha == today) %>% select(-Fecha)
 
-# --------- creating the map ---------
+# The province data
+covid19_confirmed_p <- inner_join(ecu_map_p, confirmed_p, by = "Provincia") # We do the same for the province data
+covid19_confirmed_p <- covid19_confirmed_p %>% filter(Fecha == today) %>% select(-Fecha)
+
+# --------- creating the interactive map ---------
 # We filter the data and take out the nonzero elements
-covid19_nozeros <- covid19_confirmed_today[!covid19_confirmed_today$Casos == 0,]
+covid19_nozeros_c <- covid19_confirmed_c[!covid19_confirmed_c$Casos == 0,] # We take the zeros out of the sf file
 
-covid19_confirmed_today_map <- covid19_confirmed_today %>%
-  tm_shape() + tm_borders(col = "grey", lwd = 2, alpha = 0.4) +
+covid19_confirmed_today_map <-
+  tm_shape(ecu_map_p) + tm_borders(col = "grey", lwd = 2, alpha = 0.4) + # This is the province sf file
   tm_polygons(col = "skyblue", alpha = 0.2) + 
-  tm_shape(covid19_nozeros) + # We add a second tm_shape with the coronavirus data
-  tm_bubbles(size = "Casos", col = "red", alpha = 0.6, scale = 4, border.lwd = NA)
+  tm_shape(covid19_confirmed_p) + # We add a second tm_shape with the province data stored in the sf file
+  tm_fill(col = "Casos", alpha = 0, legend.show = FALSE) + # We set transparency to 0 because we don't want any colors, just the data
+  tm_shape(covid19_nozeros_c) + # We add a third tm_shape with the canton data stored in the sf file
+  tm_bubbles(size = "Casos", col = "red", alpha = 0.6, scale = 4, border.lwd = NA) # We add the bubbles
 
 covid19_confirmed_today_map <- tmap_leaflet(covid19_confirmed_today_map) # We transform the map into a leaflet map
 
 covid19_confirmed_today_map %>% removeLayersControl() %>%
-  setView(lng = -78.50374, lat = -1.289527, zoom = 5) %>% fitBounds(-79.6, -4.2, -77.0, 0.8) 
+  setView(lng = -78.50374, lat = -1.289527, zoom = 5) %>% fitBounds(-79.6, -4.2, -77.0, 0.8) # We center the map in Tungurahua
