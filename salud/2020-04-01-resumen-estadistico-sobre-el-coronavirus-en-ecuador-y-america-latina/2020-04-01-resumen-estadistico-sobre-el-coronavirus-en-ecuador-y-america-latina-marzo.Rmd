@@ -1,0 +1,203 @@
+---
+title: Resumen estadístico actualizado sobre el coronavirus en Ecuador y América Latina
+authors: 
+  - Alonso Quijano
+
+slug: post/salud/resumen-estadistico-brote-coronavirus-ecuador-america-latina.md
+categories:
+  - Salud
+tags:
+  - Coronavirus
+  - Mapas
+description: 'La rápida propagación del Covid-19 en Ecuador y América Latina ya ha afectado a todos los países de la región. Te mostramos un resumen estadístico sobre el brote de coronavirus en Ecuador y América Latina. Hemos incluido tablas, gráficos y mapas para mejor ilustrar cómo nos está afectando esta pandemia.'
+thumbnail: '/post/salud/2020-04-01-resumen-estadistico-sobre-el-brote-de-coronavirus-en-ecuador-y-america-latina.png'
+images: 
+  - 'https://elquantificador.org/post/salud/2020-04-01-resumen-estadistico-sobre-el-brote-de-coronavirus-en-ecuador-y-america-latina.png'
+---
+```{r, echo=FALSE, include=FALSE}
+# --------- these are the packages used to create the map ---------
+library(tidyverse)
+library(sf)
+library(rmapshaper)
+library(tmap)
+library(DT)
+
+# --------- this is the folder where we will extract the data ---------
+library(knitr)
+opts_knit$set(root.dir = "~/Documents/elquantificador_projects/coronavirus_map_canton")
+
+options(scipen=999)
+```
+
+```{r, echo=FALSE, include=FALSE}
+# We create two sets of countries. la_countries which only include Latinamercian countries, and la_countries_plus, which
+# include Latinamerican countries plus other Caribean countries and non-Spanish speaking countries.
+
+la_countries <- c("Brazil", "Mexico", "Colombia", "Argentina", "Peru", "Venezuela", "Chile", "Ecuador", "Guatemala", 
+                  "Cuba", "Haiti", "Bolivia", "Dominican Republic", "Honduras", "Paraguay", "El Salvador", "Nicaragua", "Costa Rica", 
+                  "Panama", "Uruguay")
+
+la_countries_plus <- c("Brazil", "Mexico", "Colombia", "Argentina", "Peru", "Venezuela", "Chile", "Ecuador", 
+                       "Guatemala", "Cuba", "Haiti", "Bolivia", "Dominican Republic", "Honduras", "Paraguay", 
+                       "El Salvador", "Nicaragua", "Costa Rica", "Panama", "Uruguay", "Guyana", "Suriname", 
+                       "Puerto Rico", "Bahamas", "Belize", "Antigua and Barbuda", "Barbados", "Jamaica", 
+                       "Saint Kitts and Nevis", "Saint Lucia", "Trinidad and Tobago", "Grenanda", "Dominica",
+                       "French Guiana (France)")
+
+# ---------- Confirmed cases
+
+confirmed_global_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
+confirmed_global <- read_csv(confirmed_global_url)
+
+confirmed_la <- semi_join(confirmed_global, as.data.frame(la_countries), 
+                          by = c("Country/Region" = "la_countries"))
+
+confirmed_la <- confirmed_la %>% select(-c(`Province/State`, Lat, Long)) %>% rename(País = `Country/Region`)
+
+# Wide to long
+confirmed_la <- confirmed_la %>% gather(Fecha, `Casos confirmados`, - País) %>% 
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%y" ))
+
+
+# ---------- Confirmed deaths
+
+deaths_global_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
+deaths_global <- read_csv(deaths_global_url)
+
+deaths_la <- semi_join(deaths_global, as.data.frame(la_countries), 
+                          by = c("Country/Region" = "la_countries"))
+
+deaths_la <- deaths_la %>% select(-c(`Province/State`, Lat, Long)) %>% rename(País = `Country/Region`)
+
+# Wide to long
+deaths_la <- deaths_la %>% gather(Fecha, Fallecidos, - País) %>% 
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%y" ))
+
+# ---------- Recovered
+
+recovered_global_url <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
+recovered_global <- read_csv(recovered_global_url)
+
+recovered_la <- semi_join(recovered_global, as.data.frame(la_countries), 
+                          by = c("Country/Region" = "la_countries"))
+
+recovered_la <- recovered_la %>% select(-c(`Province/State`, Lat, Long)) %>% rename(País = `Country/Region`)
+
+# Wide to long
+recovered_la <- recovered_la %>% gather(Fecha, Recuperados, - País) %>% 
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%y" )) 
+
+# ---------- Covid-19 data for all LA countries in one data frame
+
+covid19_la <- confirmed_la %>% left_join(deaths_la, by = c("País" = "País", "Fecha" = "Fecha")) %>% 
+  left_join(recovered_la, by = c("País" = "País", "Fecha" = "Fecha")) 
+
+# ---------- Data summary
+today <- "2020-04-04"
+
+covid19_la_0331 <- covid19_la %>% filter(Fecha == today) %>% select(-Fecha) %>% arrange(desc(`Casos confirmados`))
+
+covid19_la_0331_sum <- summarize(covid19_la_0331, total_confirmed = sum(`Casos confirmados`), 
+                                 total_deaths = sum(Fallecidos), total_recovered = sum(Recuperados))
+```
+
+El 29 de febrero de 2020, el Ecuador se convirtió en el tercer país en América Latina en confirmar su primer caso de Covid-19. Brasil y México fueron los primeros. En tan solo un mes, el virus logró propagarese en todos los países de la región y hasta ayer, `r today`, se contabilizaron `r covid19_la_0331_sum$total_confirmed` casos confirmados, `r covid19_la_0331_sum$total_deaths` fallecidos y `r covid19_la_0331_sum$total_recovered` recuperados.
+
+**NOTA:** Todas las estadísticas están actualizadas al **sábado, 4 de abril de 2020**. Los datos se actualizan automáticamente todos los día en la mañana con los datos del día anterior.
+
+**Tabla 1. Número de casos confirmados, fallecidos, y recuperados por país**
+
+```{r, echo=FALSE}
+datatable(covid19_la_0331, options = list(pageLength = 5, lengthMenu = c(5, 10, 15, 20)))
+```
+
+```{r, echo=FALSE, include=FALSE}
+# ---------- Loading map
+Americas <- st_read("Americas.shp")
+Americas <- ms_simplify(Americas, keep=0.1)
+
+la_countries_plus_map <- inner_join(Americas, as.data.frame(la_countries_plus), 
+                                             by =c("COUNTRY" = "la_countries_plus"))
+
+# ---------- Confirmed cases gift map 
+march <- "2020-03-01"
+confirmed_la_march <- confirmed_la %>% filter(Fecha >= march  & Fecha <= today)
+
+confirmed_la_march_map_nozero <- inner_join(la_countries_plus_map, confirmed_la_march, by = c("COUNTRY" = "País")) %>%
+  filter(Fecha >= march & Fecha <= today)
+confirmed_la_march_map_nozero <- confirmed_la_march_map_nozero[!confirmed_la_march_map_nozero$`Casos confirmados`==0,]
+
+confirmed_la_map <- 
+tm_shape(la_countries_plus_map) + tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_shape(confirmed_la_march_map_nozero) +
+  tm_fill(col = "Casos confirmados", palette = "OrRd", style = "log10_pretty", 
+    
+          legend.format = list(digits = 0), legend.show = TRUE) +
+  tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_facets(by = "Fecha", ncol = 1, nrow = 1, free.coords = FALSE)
+
+# ---------- Deathss gift map 
+
+deaths_la_march <- deaths_la %>% filter(Fecha >= march & Fecha <= today)
+
+deaths_la_march_map_nozero <- inner_join(la_countries_plus_map, deaths_la_march, by = c("COUNTRY" = "País")) %>%
+  filter(Fecha >= march & Fecha <= today)
+deaths_la_march_map_nozero <- deaths_la_march_map_nozero[!deaths_la_march_map_nozero$Fallecidos==0,]
+
+deaths_la_map <- 
+  tm_shape(la_countries_plus_map) + tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_shape(deaths_la_march_map_nozero) +
+  tm_fill(col = "Fallecidos", palette = "OrRd", style = "log10_pretty", 
+          legend.format = list(digits = 0), legend.show = TRUE) +
+  tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_facets(by = "Fecha", ncol = 1, nrow = 1, free.coords = FALSE)
+
+```
+
+A pesar de las medidas que impuso el gobierno ecuatoriano a inicios de marzo, es difícil afirmar que estas has sido los suficientemente efectivas para desacelerar el crecimiento de casos confirmados y muertes por Covid-19. Otros países también han tomado medidas, pero aún así el virus ha logrado esparcirse en toda la región. Aquí te mostramos dos mapas.
+
+**Mapa 1. Evolución de número de casos confirmados en América Latina**
+```{r, fig.show='animate', ffmpeg.format='gif', dev='jpeg', interval=0.4, warning=FALSE, echo=FALSE}
+confirmed_la_map
+```
+Fuente: Center for Systems Science and Engineering (CSSE) de Johns Hopkins University
+
+**Mapa 2. Evolución de número de fallecidos en América Latina**
+```{r, fig.show='animate', ffmpeg.format='gif', dev='jpeg', interval=0.4, warning=FALSE, echo=FALSE}
+deaths_la_map
+```
+Fuente: Center for Systems Science and Engineering (CSSE) de Johns Hopkins University
+
+El 14 de marzo, el vicepresidente Otto Sonnenholzner anunció el cierre de fronteras a partir del lunes 16 de marzo a las 13:59. Otros países también han tomado medidas similares. A mediados de marzo, Perú también cerró sus fronteras. Colombia lo hizo 23 de marzo. Sin embargo, a finales de marzo Brazil ya alcanza casi seis mil casos confirmados, Chile los tres mil y Ecuador ya supera los dos mil.
+
+**Gráfico 1. Evolución del número de casos confirmados por país en América Latina**
+
+```{r, echo=FALSE}
+covid19_la_0331_top10 <- covid19_la_0331[1:10,1]
+levels_la_0331_top10 <- as.vector(covid19_la_0331_top10$País)
+
+covid19_la %>% semi_join(covid19_la_0331_top10, by = "País") %>% filter(Fecha >= march & Fecha <= today) %>%
+  mutate(País = factor(País, levels = levels_la_0331_top10)) %>%
+  ggplot(aes(x=Fecha, y=`Casos confirmados`, col = País)) + geom_line() + 
+  labs(x="")
+```
+Fuente: Center for Systems Science and Engineering (CSSE) de Johns Hopkins University
+
+```{r, echo=FALSE, include=FALSE}
+population_country <- read_csv("population_country.csv")
+
+covid19_la_0331_percap <- covid19_la_0331 %>% 
+  left_join(population_country %>% select(-`Country Code`), by = c("País" = "Country Name")) %>%
+  mutate(`Casos por cada millón` = round(`Casos confirmados`/Population * 1000000,1),
+         `Fallecidos por cada millón` = round(Fallecidos/Population * 1000000,1)) %>% 
+  select(-c(Recuperados, Population))
+```
+
+
+Panamá, Chile y Ecuador son los países con mayor número de casos confirmados por cada millón de habitantes. Así mismo, Panamá y República Dominicana y Ecuador cuentan con el mayor número de fallecidos por cada millón de habitantes. En Ecuador, por cada millón de habitantes, existen `r covid19_la_0331_percap[3,4]` casos confirmados y `r covid19_la_0331_percap[3,5]` fallecidos. Te ofrecemos más detalle en la siguiente tabla.
+
+**Tabla 2. Número de casos confirmados y fallecidos por cada millón de habitantes**
+```{r, echo=FALSE}
+datatable(covid19_la_0331_percap, options = list(pageLength = 5, lengthMenu = c(5, 10, 15, 20)))
+```
+Fuente: Center for Systems Science and Engineering (CSSE) de Johns Hopkins University (datos del Covid-19) y Banco Mundial (datos poblacionales proyectados al 2018)
