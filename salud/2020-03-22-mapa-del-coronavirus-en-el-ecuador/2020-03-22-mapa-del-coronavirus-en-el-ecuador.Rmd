@@ -33,7 +33,7 @@ confirmed_p <- read_csv(url) # Now we have loaded the confirmed cases by provinc
 # Ecuador's administrative division (*.shp) data ----
 
 # Now, we need to load Ecuador's administrative division by province
-url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_adm1.zip"
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/provincias.zip"
 td <- tempdir() # We create a temporary directory
 tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
 download.file(url,tf) # We download the data into the placeholder file
@@ -52,7 +52,7 @@ ecu_map_p <- st_read(shp.file.path) # Now we have loaded the shapefile
 ecu_map_p
 
 # We first need to load Ecuador's administrative division by canton
-url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_adm2.zip"
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/cantones.zip"
 td <- tempdir() # We create a temporary directory
 tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
 download.file(url,tf) # We download the data into the placeholder file
@@ -90,7 +90,6 @@ ecu_map_c <- ecu_map_c %>% select(-c(ID_0, ISO, NAME_0, NAME_1, ID_1, ID_2, TYPE
 
 # --------- preparing coronavirus data ---------
 # The canton data
-confirmed_c <- read_csv("confirmed_canton.csv")
 
 # We need to transform the data from wide to long
 confirmed_c <- confirmed_c %>% select(-Provincia) %>% gather(Fecha, Casos, -Cantón) %>% 
@@ -101,7 +100,6 @@ confirmed_c <- confirmed_c %>% select(-Provincia) %>% gather(Fecha, Casos, -Cant
 confirmed_c$Cantón <- factor(confirmed_c$Cantón, levels = levels(ecu_map_c$Cantón))
 
 # The province data
-confirmed_p <- read_csv("confirmed_provincia.csv")
 
 # We need to transform the data from wide to long
 confirmed_p <- confirmed_p %>% gather(Fecha, Casos, -Provincia) %>% 
