@@ -1,39 +1,33 @@
 ---
-title: Mapa del coronavirus en el Ecuador
+title: Mapa actualizado del coronavirus en el Ecuador
 authors: 
   - Alonso Quijano
-date: '2020-03-22'
-categories:
-  - Salud
-tags:
-  - Coronavirus
-  - Mapas
 ---
 
-El código utilizado para hacer este mapa está acualizado al martes, 24 de marzo de 2020. Si no encuentras disponible la última actualización, por favor escríbenos a info@elquantificador.com. Muchas gracias.
-
-```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
+```{r, echo=FALSE, include=FALSE}
 # --------- these are the packages used to create the map ---------
-library(RCurl)
 library(tidyverse)
 library(sf)
 library(rmapshaper)
 library(tmap)
 library(leaflet)
+```
 
+```{r, include=FALSE}
+# --------- preparing the st data ---------
 # --------- Download the shapefile and the coronavirus csv data from github ---------
 # The coronavirus data by province and cantons ----
 
-url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/confirmed_canton.csv"
+url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/COVID19_ECU_CONFIRMED_CANTON.csv"
 confirmed_c <- read_csv(url) # Now we have loaded the confirmed cases by canton
 
-url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/confirmed_provincia.csv"
+url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/COVID19_ECU_CONFIRMED_PROVINCE.csv"
 confirmed_p <- read_csv(url) # Now we have loaded the confirmed cases by province
 
 # Ecuador's administrative division (*.shp) data ----
 
 # Now, we need to load Ecuador's administrative division by province
-url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/provincias.zip"
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_PROVINCE_SHAPEFILE.zip"
 td <- tempdir() # We create a temporary directory
 tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
 download.file(url,tf) # We download the data into the placeholder file
@@ -49,10 +43,9 @@ unzip(tf, files=c(shp.file.name, shx.file.name, dbf.fine.name, prf.fine.name), e
 shp.file.path <- file.path(td, shp.file.name)
 
 ecu_map_p <- st_read(shp.file.path) # Now we have loaded the shapefile
-ecu_map_p
 
 # We first need to load Ecuador's administrative division by canton
-url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/cantones.zip"
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_CANTON_SHAPEFILE.zip"
 td <- tempdir() # We create a temporary directory
 tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
 download.file(url,tf) # We download the data into the placeholder file
@@ -68,10 +61,20 @@ unzip(tf, files=c(shp.file.name, shx.file.name, dbf.fine.name, prf.fine.name), e
 shp.file.path <- file.path(td, shp.file.name)
 
 ecu_map_c <- st_read(shp.file.path) # Now we have loaded the shapefile
-ecu_map_c
 ```
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
+```{r, echo=FALSE, warning=FALSE, message=FALSE, comment=FALSE, include=FALSE}
+# --------- preparing canton map ---------
+# We simplify the data
+ecu_map_c <- ms_simplify(ecu_map_c, keep=0.01) # We keep the 0.4% of the polygon
+
+# We keep only the variables we need
+ecu_map_c <- ecu_map_c %>% select(-c(ID_0, ISO, NAME_0, NAME_1, ID_1, ID_2, TYPE_2, ENGTYPE_2, NL_NAME_2, VARNAME_2)) %>%
+  rename(Cantón = NAME_2) %>% # We only keep the province names and the geometry
+  filter(!Cantón == "Bolívar") # We take out the canton Bolivar beacuse there are two catons with the same name,
+  # one in Manabi and one in Carchi. This duplicate creates a problem when illustrating the map. As there are very few
+  # cases in Bolivar in Manabi, we will remove them.
+
 # --------- preparing province map ---------
 # We simplify the data
 ecu_map_p <- ms_simplify(ecu_map_p, keep=0.01) # We keep the 0.4% of the polygon
@@ -80,61 +83,52 @@ ecu_map_p <- ms_simplify(ecu_map_p, keep=0.01) # We keep the 0.4% of the polygon
 ecu_map_p <- ecu_map_p %>% select(-c(ID_0, ISO, NAME_0, ID_1, TYPE_1, ENGTYPE_1, NL_NAME_1, VARNAME_1)) %>%
   rename(Provincia = NAME_1)
 
-# --------- preparing canton map ---------
-# We simplify the data
-ecu_map_c <- ms_simplify(ecu_map_c, keep=0.01) # We keep the 0.4% of the polygon
-
-# We keep only the variables we need
-ecu_map_c <- ecu_map_c %>% select(-c(ID_0, ISO, NAME_0, NAME_1, ID_1, ID_2, TYPE_2, ENGTYPE_2, NL_NAME_2, VARNAME_2)) %>%
-  rename(Cantón = NAME_2) # We only keep the province names and the geometry
-
 # --------- preparing coronavirus data ---------
 # The canton data
+confirmed_c
 
 # We need to transform the data from wide to long
 confirmed_c <- confirmed_c %>% select(-Provincia) %>% gather(Fecha, Casos, -Cantón) %>% 
-  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%Y")) %>%
-  filter(Fecha >= as.Date("2020-03-16")) %>% # We only have data by province from May 16th (this is the date where we started to collect data)
-  replace_na(list(Casos = 0))
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%y"), Casos = as.numeric(Casos)) %>%
+  filter(Fecha >= as.Date("2020-03-16")) %>% # We only have data by province from May 16th
+  replace_na(list(Casos = 0)) %>% filter(!Cantón == "Bolívar")
 
 confirmed_c$Cantón <- factor(confirmed_c$Cantón, levels = levels(ecu_map_c$Cantón))
 
 # The province data
+confirmed_p
 
 # We need to transform the data from wide to long
 confirmed_p <- confirmed_p %>% gather(Fecha, Casos, -Provincia) %>% 
-  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%Y")) %>%
+  mutate(Fecha = as.Date(Fecha, format = "%m/%d/%y")) %>%
   filter(Fecha >= as.Date("2020-03-16")) %>% # We only have data by province from May 16th
   replace_na(list(Casos = 0))
 
 confirmed_p$Provincia <- factor(confirmed_p$Provincia, levels = levels(ecu_map_p$Provincia))
-```
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
 # --------- merging the st data with the coronavirus data ---------
 centroid <- st_centroid(ecu_map_p)
 centroid[23,] # We use Tungurahua province as the center of our map 
 
-today <- "2020-03-24"
-
 # The canton data
 covid19_confirmed_c <- inner_join(ecu_map_c, confirmed_c, by = "Cantón") # We merge the map data with the coronavirus data
+
+today <- "2020-04-08"
 covid19_confirmed_c <- covid19_confirmed_c %>% filter(Fecha == today) %>% select(-Fecha)
 
 # The province data
-covid19_confirmed_p <- inner_join(ecu_map_p, confirmed_p, by = "Provincia") # We do the same for the province data
+covid19_confirmed_p <- inner_join(ecu_map_p, confirmed_p, by = "Provincia") # We merge the map data with the coronavirus data
 covid19_confirmed_p <- covid19_confirmed_p %>% filter(Fecha == today) %>% select(-Fecha)
-```
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
+
 # --------- creating the interactive map ---------
 # We filter the data and take out the nonzero elements
-covid19_nozeros_c <- covid19_confirmed_c[!covid19_confirmed_c$Casos == 0,] # We take the zeros out of the sf file
+covid19_nozeros_c <- covid19_confirmed_c[!covid19_confirmed_c$Casos == 0,]
 
 covid19_confirmed_today_map <-
   tm_shape(ecu_map_p) + tm_borders(col = "grey", lwd = 2, alpha = 0.4) + # This is the province sf file
   tm_polygons(col = "skyblue", alpha = 0.2) + 
-  tm_shape(covid19_confirmed_p) + # We add a second tm_shape with the province data stored in the sf file
+  tm_shape(covid19_confirmed_p) +  # We add a second tm_shape with the province data stored in the sf file
   tm_fill(col = "Casos", alpha = 0, legend.show = FALSE) + # We set transparency to 0 because we don't want any colors, just the data
   tm_shape(covid19_nozeros_c) + # We add a third tm_shape with the canton data stored in the sf file
   tm_bubbles(size = "Casos", col = "red", alpha = 0.6, scale = 4, border.lwd = NA) # We add the bubbles
@@ -142,9 +136,30 @@ covid19_confirmed_today_map <-
 covid19_confirmed_today_map <- tmap_leaflet(covid19_confirmed_today_map) # We transform the map into a leaflet map
 ```
 
-Después que la OMS haya declarado pandemia al brote de Covid-19, el presidente del Ecuador, Lenín Moreno, declaró emergencia sanitaria a todo el país. A fin de lugar contra la propagación del coronavirus, es imporante permanecer en casa, obedeciendo a las medidas de prevención y manteniéndonos informados de cómo avanza la situación sanitaria. Te presentamos un mapa interactivo para que sigas día a día el número de casos confirmados de coronavirus en el país. El mapa está actualizado al `r today`.
+Después que la OMS haya declarado pandemia al brote de Covid-19, el presidente del Ecuador, Lenín Moreno, declaró emergencia sanitaria a todo el país. A fin de luchar contra la propagación del coronavirus, es imporante permanecer en casa, obedeciendo a las medidas de prevención y manteniéndonos informados de cómo avanza la situación sanitaria. Te presentamos un mapa interactivo para que sigas día a día el número de casos confirmados de coronavirus en el país. El mapa está actualizado al **miércoles, 8 de abril de 2020**.
 
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align = "center", fig.height = 7, fig.width = 6}
+url <- "https://raw.githubusercontent.com/aquijanoruiz/elquantificador_posts/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/COVID19_ECU_CONFIRMED_NATIONAL.csv"
+confirmed_n <- read_csv(url)
 
+# Organizing the data
+colnames <- confirmed_n[["Casos"]]
+confirmed_n <- t(confirmed_n[,2:ncol(confirmed_n)])
+confirmed_n <- cbind(rownames(confirmed_n), confirmed_n)
+rownames(confirmed_n) <- NULL
+colnames(confirmed_n) <- c("Fecha", colnames)
+confirmed_n <- as.data.frame(confirmed_n)
+confirmed_n$Fecha <- as.Date(confirmed_n$Fecha, format = "%m/%d/%y")
+
+# We create the table that will illustrate the data
+table <- confirmed_n %>% filter(Fecha == today) %>% select(-Fecha)
+
+library(kableExtra)
+kable(table) %>% kable_styling() %>% column_spec(1, bold = T) %>%
+  column_spec(2, color = "brown", bold = T) %>% column_spec(3, color = "green", bold = T) %>% 
+  column_spec(4, color = "orange", bold = T) %>% 
+  column_spec(5, color = "skyblue", bold = T)
+```
 
 <style>
 .html-widget {
@@ -152,9 +167,11 @@ Después que la OMS haya declarado pandemia al brote de Covid-19, el presidente 
 }
 </style>
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, fig.align = "center", fig.height = 7, fig.width = 6}
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align = "center", fig.height = 7, fig.width = 6}
 covid19_confirmed_today_map %>% removeLayersControl() %>%
-  setView(lng = -78.50374, lat = -1.289527, zoom = 5) %>% fitBounds(-79.6, -4.2, -77.0, 0.8) # We center the map in Tungurahua
+  setView(lng = -78.50374, lat = -1.289527, zoom = 6) %>% fitBounds(-80.0, -4.2, -76.6, 0.8) # We center the map in Tungurahua
 ```
 
-Fuente: Ministerio de Salud del Ecuador
+Fuente: Servicio Nacional de Gestión de Riesgo y Emergencia
+
+Este mapa fue elaborado utilizando lenguaje R a través los paquetes `tmap` y `leaflet`. Si estás interesado en reproducir este código y la metodología empleada, visita nuestra página en [github](https://github.com/aquijanoruiz/elquantificador_posts/tree/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador). Para más información, también me puedes escribir a alonso@elquantificador.org.
