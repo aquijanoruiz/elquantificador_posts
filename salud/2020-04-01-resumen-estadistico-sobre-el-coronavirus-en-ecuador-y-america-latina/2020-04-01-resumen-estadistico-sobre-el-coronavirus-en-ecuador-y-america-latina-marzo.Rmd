@@ -211,4 +211,4 @@ datatable(covid19_la_0331_percap, options = list(pageLength = 5, lengthMenu = c(
 Fuente: Center for Systems Science and Engineering (CSSE) de Johns Hopkins University (datos del Covid-19) y Banco Mundial (datos poblacionales proyectados al 2018)
 
 ### Metodología
-Los análisis y mapas fueron creados usando lenguaje `R`. Para más detalle sobre la metodología empleada en este artículo y para reproducir el código utilizado, te invitamos a consultar este [vínculo](https://github.com/aquijanoruiz/elquantificador_posts/tree/master/salud/2020-04-01-resumen-estadistico-sobre-el-coronavirus-en-ecuador-y-america-latina). Si tienes duda sobre la metodología o el código, escríbeme a alonso@elquantificador.org.
+Los análisis y mapas fueron creados usando lenguaje `R`. Para más detalle sobre la metodología empleada en este artículo y para reproducir el código utilizado, te invitamos a visitar nuestra página en [github](https://github.com/aquijanoruiz/elquantificador_posts/tree/master/salud/2020-04-01-resumen-estadistico-sobre-el-coronavirus-en-ecuador-y-america-latina). Si tienes duda sobre la metodología o el código, escríbeme a alonso@elquantificador.org.
