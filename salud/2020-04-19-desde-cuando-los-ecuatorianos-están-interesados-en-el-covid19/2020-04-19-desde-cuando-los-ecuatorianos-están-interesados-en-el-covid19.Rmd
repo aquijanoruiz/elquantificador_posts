@@ -1,0 +1,37 @@
+---
+title: "¿Desde cuándo los ecuatorianos están interesados en el COVID19?"
+output: html_document
+---
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE, comment=FALSE}
+library(tidyverse)
+library(gtrendsR)
+library(reshape2)
+library(hrbrthemes)
+
+# We download the data from 2020-1-10 to 2020-04-25 ----------
+google.trends = gtrends(c("coronavirus"), geo = c("EC"), gprop = "web", time = "2020-1-10 2020-04-25")[[1]]
+
+# We manipulate the data to be able to plot it ----------
+google.trends = dcast(google.trends, date ~ keyword + geo, value.var = "hits")
+google.trends$coronavirus_EC <- as.numeric(google.trends$coronavirus_EC)
+google.trends$coronavirus_EC <- ifelse(is.na(google.trends$coronavirus_EC), 0, 
+                                       google.trends$coronavirus_EC)
+google.trends$date = as.Date(google.trends$date)
+google.trends$increase <- google.trends$coronavirus_EC/lag(google.trends$coronavirus_EC) - 1
+
+# We plot the data and add annotations ----------
+ggplot(data = google.trends, aes(x=date, y=coronavirus_EC)) + 
+  geom_line(color="#69b3a2", size = 0.8) + 
+  geom_area(fill="#69b3a2", alpha=0.5) +
+  labs(title = "Interés de los ecuatorianos en el covid19", x = "", y = "Interés a lo largo del tiempo") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "10 days", 
+               date_minor_breaks = "5 days",
+               date_labels = "%b %d") + theme_ipsum() +
+  theme(axis.text.y = element_text(size = 10), axis.text.x = element_text(angle = 35, hjust = 1, size = 10)) +
+  annotate("text", x = as.Date("2020-03-1"), y = 75, label = "bolditalic('Primer caso \n confirmado')", parse = TRUE, size = 2.8, hjust = 0) +
+  annotate("text", x = as.Date("2020-03-16"), y = 86, label = "bolditalic('Se anuncia el cierre \n de fronteras')", parse = TRUE, size = 2.8, hjust = 0) +
+  annotate("text", x = as.Date("2020-04-8"), y = 85, label = "bolditalic('Se reportan \n muertos en las \n calles de \n Guayaquil')", parse = TRUE, size = 2.8, hjust = 0) +
+  annotate("text", x = as.Date("2020-01-26"), y = 25, label = "bolditalic('Primer caso \n sospechoso')", parse = TRUE, size = 2.8, hjust = 0)
+```
