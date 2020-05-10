@@ -1,0 +1,100 @@
+---
+title: La inconformidad por el recorte presupuestario se destapó en Twitter
+author: Alonso Quijano
+date: '2020-05-09'
+---
+
+```{r, eval=FALSE}
+
+# Este es el código que descarga los twits
+library(rtweet)
+
+recorte_1 <- search_tweets("#NoAlRecorte", n = 12000, include_rts = FALSE)
+recorte_2 <- search_tweets("#NoAlRecortePresupuestario", n = 12000, include_rts = FALSE)
+recorte <- rbind(recorte_1, recorte_2)
+recorte <- unique(recorte)
+```
+
+```{r, echo=FALSE, warning=FALSE, comment=FALSE, message=FALSE}
+library(tidyverse)
+library(stringr)
+library(tm)
+library(syuzhet)
+library(wordcloud)
+library(qdap)
+library(hrbrthemes)
+library(RColorBrewer)
+library(gridExtra)
+
+# La base de datos de tuits también se puede descargar en este vínculo
+recorte_url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/economia/2020-05-09-la-inconformidad-por-el-recorte-presupuestario-se-destapo-en-twitter/recorte.rds"
+
+recorte <- readRDS(url(recorte_url))
+
+# Una función para eliminar el ruido en el texto  ----------
+
+clean_text <- function(text) {
+  new_text <- tolower(text)
+  new_text <- str_replace_all(new_text,"http\\S*", "") # Elimina urls
+  new_text <- str_replace_all(new_text,"@\\S*", "") # Elimina los @
+  new_text <- str_replace_all(new_text,"[[:punct:]]", " ") # Elimina los signos de puntuación
+  new_text <- str_replace_all(new_text,"[[:digit:]]", " ") # Elimina los números
+  new_text <- str_replace_all(new_text,"\\s[a-z]{1}\\s", " ") # Elimina las palabras de un solo caracter
+  new_text <- str_replace_all(new_text,"\\s[a-z]{1}\\s", " ") # Elimina las palabras de un solo caracter (otra vez)
+  new_text <- str_replace_all(new_text,"[\\s]+", " ") # Elimina los espacios
+  return(new_text)
+}
+
+## --------------------------------------------------------------------------- ##
+## ----------------------- Hacemos una nube de palabras ---------------------- ##
+## --------------------------------------------------------------------------- ##
+
+texto <- recorte$text
+texto_limpio <- clean_text(texto)
+
+texto_corpus <-  texto_limpio %>% 
+  VectorSource() %>% 
+  Corpus() 
+
+texto_corpus <- tm_map(texto_corpus, removeWords, stopwords("spanish"))
+freq_terms(texto_corpus, 70) # Vemos las 70 palabras con mayor frecuencia
+
+# Eliminamos más palabras innecesarias
+custom_stopwords <- c("noalrecorte", "noalrecortepresupuestario", "si", "ser", "ahora", "hoy", 
+                      "quieren", "solo", "debe", "puede", "quiere", "así", "deben", "siempre",
+                      "hacer")
+
+texto_corpus <- tm_map(texto_corpus, removeWords, custom_stopwords)
+
+wordcloud(texto_corpus, colors = brewer.pal(6, "Dark2"), max.words = 60,
+          scale = c(3.8,0.7), random.order = FALSE)
+
+## --------------------------------------------------------------------------- ##
+## --------------------------- Los más retuiteados --------------------------- ##
+## --------------------------------------------------------------------------- ##
+
+plot_1 <- recorte %>% group_by(screen_name) %>% 
+  summarise(total_retweet_count = sum(retweet_count)) %>% 
+  arrange(desc(total_retweet_count)) %>% slice(1:10) %>% 
+  ggplot(aes(x = reorder(screen_name, total_retweet_count), y = total_retweet_count, fill = screen_name)) + 
+  geom_bar( stat = "identity") + coord_flip() + 
+  labs(title = "Los más retuiteados", x = "", y = "") + 
+  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") +
+  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
+  
+## --------------------------------------------------------------------------- ##
+## --------------------------- Los más mencionados --------------------------- ##
+## --------------------------------------------------------------------------- ##
+
+mencionados <- unlist(recorte$mentions_screen_name)
+mencionados <- as.data.frame(table(mencionados))
+
+plot_2 <- mencionados %>% arrange(desc(Freq)) %>% slice(1:10) %>% 
+  ggplot(aes(x = reorder(mencionados, Freq), y = Freq, fill = mencionados)) + 
+  geom_bar( stat = "identity") + coord_flip() + 
+  labs(title = "Los más mencionados", x = "", y = "") + 
+  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") +
+  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
+
+grid.arrange(plot_1, plot_2, ncol = 2)
+```
