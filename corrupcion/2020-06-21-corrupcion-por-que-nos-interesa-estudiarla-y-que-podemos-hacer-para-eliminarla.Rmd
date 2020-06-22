@@ -1,0 +1,128 @@
+---
+title: 'Corrupción: ¿por qué nos interesa estudiarla y qué podemos hacer para eliminarla?'
+authors: 
+  - Alonso Quijano
+date: '2020-06-21'
+---
+
+```{r, include=FALSE}
+############################################
+##         Descargando los datos          ##
+############################################
+
+# Descargar los datos del CPI 2019
+url <- "https://images.transparencycdn.org/images/2019_CPI_FULLDATA.zip"
+td <- tempdir()
+tf <- tempfile(tmpdir=td, fileext = ".zip")
+download.file(url,tf)
+f.name <- unzip(tf, list=TRUE)$Name[5]
+unzip(tf, files=f.name, exdir=td, overwrite=TRUE)
+f.path <- file.path(td, f.name)
+
+library(readxl)
+corrupcion_19 <- read_excel(f.path, skip = 2)
+
+# Descargar los datos del CPI 2018
+url <- "https://images.transparencycdn.org/images/2018_CPI_FullResults.zip"
+td <- tempdir()
+tf <- tempfile(tmpdir=td, fileext = ".zip")
+download.file(url,tf)
+f.name <- unzip(tf, list=TRUE)$Name[5]
+unzip(tf, files=f.name, exdir=td, overwrite=TRUE)
+f.path <- file.path(td, f.name)
+
+corrupcion_18 <- read_excel(f.path, skip = 2)
+
+# Descargar PIB per capita 2018
+library(wbstats)
+pib <- wb(indicator = "NY.GDP.PCAP.CD", startdate = 2018, enddate = 2018)
+
+############################################
+##            Mapa CPI 2019               ##
+############################################
+library(tidyverse)
+
+corrupcion_ame <- corrupcion_19 %>% filter(Region == "AME") %>% arrange(desc(`CPI score 2019`)) %>%
+  mutate(ranking = rank(`CPI score 2019`, ties.method = "max"))
+
+corrupcion_19 %>% summarise(mean(`CPI score 2019`))
+
+corrupcion_ame[corrupcion_ame$Country == "Ecuador",]
+
+# Mapa CPI 
+library(rworldmap)
+corrupcion_map <- joinCountryData2Map(corrupcion_19, 
+                                  joinCode = "ISO3", nameJoinColumn = "ISO3")
+corrupcion_map_poly <- fortify(corrupcion_map)
+corrupcion_map_poly <- merge(corrupcion_map_poly, corrupcion_map@data, by.x = "id", by.y = "ADMIN")
+
+library(RColorBrewer)
+RdOrYl <- rev(brewer.pal(11, "YlOrRd"))
+
+paises_peq <- data.frame(code=c("ATG", "COM", "CPV", "DMA", "FJI", "FSM",
+                                      "GRD", "KIR", "KNA", "LCA", "MDV", "MHL",
+                                      "MUS", "NRU","PLW", "SLB", "STP", "SYC", 
+                                      "TON", "TUV", "VCT", "VUT", "WSM"))
+
+indice <- corrupcion_19$ISO3 %in% paises_peq$code
+paises_peq_data <- corrupcion_19[indice,]
+
+
+paises_peq_map <- joinCountryData2Map(paises_peq_data, 
+                                      joinCode = "ISO3", nameJoinColumn = "ISO3")
+
+paises_peq_map_poly <- fortify(paises_peq_map)
+paises_peq_map_poly <- merge(paises_peq_map_poly, paises_peq_map@data, by.x = "id", by.y = "ADMIN")
+
+paises_peq_map_poly <- paises_peq_map_poly %>%
+  filter(ISO3 %in% paises_peq_data$ISO3) %>%
+  group_by(ISO3) %>%
+  slice(1) %>%
+  select(long, lat, ISO3, `CPI score 2019`)
+```
+
+``````{r, echo=FALSE, warning=FALSE, message=FALSE, comment=FALSE, fig.height=3.5}
+ggplot() +
+  coord_map(xlim = c(-180, 180), ylim = c(-50, 65)) +
+  geom_polygon(data = corrupcion_map_poly, aes(long, lat, group = group,
+                                           fill = `CPI score 2019`), size = 0.3) + 
+  scale_fill_gradientn(name = "Puntuación CPI 2019", colors = RdOrYl, limits = c(0,100)) +
+  geom_point(data = paises_peq_map_poly, aes(long, lat,
+                                               color = `CPI score 2019`), size = 0.8) +
+  scale_color_gradientn(name = "Puntuación CPI 2019", colors = RdOrYl, limits = c(0,100)) +
+  theme_bw() + xlab(NULL) + ylab(NULL) + 
+  theme(panel.grid.major = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.position = "bottom",
+        legend.direction = "horizontal")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=5}
+############################################
+#     CPI vs PIB per capita 2018          ##
+############################################
+
+# Observamos la relación entre PIB per cápita y corrupción
+pib_co <- inner_join(corrupcion_18, 
+                     select(pib, country, iso3c, value), 
+                     by = c("ISO3" = "iso3c"))
+
+corte <- c(1000, 3000, 9000, 30000, 90000)
+pib_co <- pib_co %>% mutate(x = replicate(nrow(pib_co), 0), 
+                            y = replicate(nrow(pib_co), 0))
+
+library(plyr)
+pib_co$Region <- revalue(pib_co$Region, c("AME" = "América", "AP" = "Asia-Pacífico",
+                                   "ECA" = "Europa y Asia Central", "MENA" = "Medio Oriente y Norte de África",
+                                   "SSA" = "Áfria Subsahariana", "WE/EU" = "Europa del Este y Unión Europea"))
+
+ggplot(data = pib_co, aes(x = `CPI Score 2018`, y = value)) + 
+  geom_text(aes(label = ISO3, col = Region), size = 2.5, show.legend = F) +
+  geom_point(aes(x = x, y = y, col = Region)) +
+  scale_y_log10(breaks = corte, labels = corte) +
+  labs(x = "Puntuación CPI 2018", y = "PIB per cápita (en log)", col = "Región") +
+  theme(legend.position="bottom")
+```
