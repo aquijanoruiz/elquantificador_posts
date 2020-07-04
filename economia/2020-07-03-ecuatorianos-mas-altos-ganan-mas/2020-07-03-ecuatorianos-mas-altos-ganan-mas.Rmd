@@ -86,11 +86,33 @@ personas <- personas %>%
 ####             Ingreso Laboral                ####
 ####################################################
 
-is.element(999999, personas$f1_s3_15) # Observamos que no hay 999999
+is.element(999999, personas$f1_s3_15) # Observamos que SI hay 999999
 
-#Una función para convertir los NAs en 0
-ingresos <- personas[, c("f1_s3_15", "f1_s3_16_2", "f1_s3_17", "f1_s3_18", 
-                         "f1_s3_19", "f1_s3_20_2", "f1_s3_22_2")]
+f1_s3_15 <- personas$f1_s3_15
+f1_s3_15[f1_s3_15 == 999999] <- 0
+
+f1_s3_16_2 <- personas$f1_s3_16_2
+f1_s3_16_2[f1_s3_16_2 == 999999] <- 0
+
+f1_s3_17 <- personas$f1_s3_17 * (-1)
+f1_s3_17[f1_s3_17 == -999999] <- 0
+
+f1_s3_18 <- personas$f1_s3_18
+f1_s3_18[f1_s3_18 == 999999] <- 0
+
+f1_s3_19 <- personas$f1_s3_19
+f1_s3_19[f1_s3_19 == 999999] <- 0
+
+f1_s3_20_2 <- personas$f1_s3_20_2
+f1_s3_20_2[f1_s3_20_2 == 999999] <- 0
+
+f1_s3_22_2 <- personas$f1_s3_22_2
+f1_s3_22_2[f1_s3_22_2 == 999999] <- 0
+
+ingresos <- data_frame(f1_s3_15, f1_s3_16_2, f1_s3_17, f1_s3_18, f1_s3_19, f1_s3_20_2, f1_s3_22_2)
+
+#Una función para ignorar los NAs
+head(ingresos)
 personas <- personas %>% mutate(inc = rowSums(ingresos, na.rm = TRUE))
 
 #Logaritmo de ingreso laboral
@@ -151,4 +173,7 @@ ggplot(grafico,aes(x=estatura, y=yoe, group=sexo)) +
 
 lm(linc~estatura,grafico[which(grafico$sexo=="hombre"),])
 lm(linc~estatura,grafico[which(grafico$sexo=="mujer"),])
+
+lm(inc~estatura,grafico[which(grafico$sexo=="hombre"),])
+lm(inc~estatura,grafico[which(grafico$sexo=="mujer"),])
 ```
