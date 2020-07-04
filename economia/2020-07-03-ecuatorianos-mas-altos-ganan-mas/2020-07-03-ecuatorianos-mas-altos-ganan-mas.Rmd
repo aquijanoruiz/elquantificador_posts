@@ -133,15 +133,17 @@ ggplot(grafico,aes(x=estatura, y=linc, group=sexo)) +
 ggplot(grafico,aes(x=estatura, y=linc, group=sexo)) +
   geom_smooth(method = "loess" , se=FALSE, aes(linetype = sexo, color = sexo)) +  theme_bw() + ylab("Logaritmo Ingreso Laboral") + xlab("Estatura en cm.")
 
-#Años de educación Vs estatura - Gráfico de LOESS(local weighted regression)
-ggplot(grafico,aes(x=estatura, y=yoe, group=sexo)) +
-  geom_smooth(method = "loess" , se=FALSE, aes(linetype = sexo, color = sexo)) + theme_bw() + ylab("Años de dducación") 
-
 #Log de ingresos Vs estatura - Gráfico de regresión lineal
 ggplot(grafico,aes(x=estatura, y=linc, group=sexo)) +
   geom_smooth(method = "lm" , se=FALSE, aes(linetype = sexo, color = sexo)) +  theme_bw() + ylab("Logaritmo Ingreso Laboral") +
   annotate("text", label = "log_ing=0.43+0.035*estatura", x = 160, y = 6.4, size = 4, colour = "paleturquoise3") +
   annotate("text", label = "log_ing=2.51519+0.022*estatura", x = 175, y = 6, size = 4, colour = "tomato3")
+
+#Años de educación Vs estatura - Gráfico de LOESS(local weighted regression)
+ggplot(grafico,aes(x=estatura, y=yoe, group=sexo)) +
+  geom_smooth(method = "loess" , se=FALSE, aes(linetype = sexo, color = sexo)) + theme_bw() + 
+  labs(x = "Años de educación", y = "Estatura en cm.", title = "Relación años de eduación Vs estatura")  +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic")) 
 
 ####################################################
 ####                  Regresiones               ####
