@@ -5,16 +5,16 @@ date: "June 30, 2020"
 output: html_document
 ---
 
-```{r include =FALSE}
+```{r, message=FALSE, warning=FALSE}
 ###############################################################
 ####                   Descargar los datos                 ####
 ###############################################################
 
-if(!require(readstata13)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(readstata13)) install.packages("readstata13", repos = "http://cran.us.r-project.org")
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 
 # Le damos un nombre al url
-url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-07-03-ecuatorianos-mas-altos-ganan-mas/1_BDD_ENS2018_f1_personas.dta.zip"
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/economia/2020-07-03-ecuatorianos-mas-altos-ganan-mas/1_BDD_ENS2018_f1_personas.dta.zip"
 # Creamos un directorio temporal
 td <- tempdir()
 # Creamos una carpeta temporal
@@ -94,7 +94,7 @@ f1_s3_15[f1_s3_15 == 999999] <- 0
 f1_s3_16_2 <- personas$f1_s3_16_2
 f1_s3_16_2[f1_s3_16_2 == 999999] <- 0
 
-f1_s3_17 <- personas$f1_s3_17 * (-1)
+f1_s3_17 <- personas$f1_s3_17 * (-1) #este es un egreso
 f1_s3_17[f1_s3_17 == -999999] <- 0
 
 f1_s3_18 <- personas$f1_s3_18
@@ -111,8 +111,7 @@ f1_s3_22_2[f1_s3_22_2 == 999999] <- 0
 
 ingresos <- data_frame(f1_s3_15, f1_s3_16_2, f1_s3_17, f1_s3_18, f1_s3_19, f1_s3_20_2, f1_s3_22_2)
 
-#Una función para ignorar los NAs
-head(ingresos)
+#Sumamos los ingresos e ignoramos los NAs
 personas <- personas %>% mutate(inc = rowSums(ingresos, na.rm = TRUE))
 
 #Logaritmo de ingreso laboral
@@ -123,7 +122,7 @@ personas <- mutate(personas, ingrl=ifelse(inc>=0,inc,NA))
 ####           Datos para el gráfico            ####
 ####################################################
 #Variables que se van a utilizar
-datos <- personas  %>% select(linc, estatura, sexo, etnia , edadanios, yoe, ingrl)
+datos <- personas  %>% select(linc, estatura, sexo, etnia , edadanios, yoe, ingrl, inc)
 #Sin vacios
 datos <- na.omit(datos)
 
