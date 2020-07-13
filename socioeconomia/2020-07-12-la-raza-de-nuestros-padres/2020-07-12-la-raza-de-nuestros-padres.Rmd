@@ -1,0 +1,61 @@
+---
+title: 'La raza de nuestros padres: ¿quién la conserva y quién la abandona?'
+author: Marco Faytong
+---
+```{r, include=FALSE}
+if(!require(RStata)) install.packages("RStata", repos = "http://cran.us.r-project.org")
+options("RStata.StataVersion" = 14)
+options("RStata.StataPath" = "\"C:\\Program Files (x86)\\Stata14\\StataSE-64\"")
+```
+
+```{r, include=FALSE}
+#Lamentablemente mis habilidades para manipula datos en R son muy limitadas, uso Stata en su mayoría. Por eso, todo el "data mangement" lo he hecho en Stata. Solo la última parte que es una visualización está en R. 
+stata("C:\\Users\\mfayt\\Google Drive\\Quantificador Marco\\Desempleo y autoidentificación étnica\\Autoidentificación étnica padres a hijos.do")
+```
+
+```{r, echo=FALSE, message = FALSE, fig.height=8}
+if(!require(readstata13)) install.packages("readstata13", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(gtable)) install.packages("gtable", repos = "http://cran.us.r-project.org")
+if(!require(grid)) install.packages("grid", repos = "http://cran.us.r-project.org")
+
+datos <- read.dta13("https://github.com/aquijanoruiz/elquantificador_posts/raw/master/socioeconomia/2020-07-12-la-raza-de-nuestros-padres/2020-07-12-la-raza-de-nuestros-padres.dta",
+                    nonint.factors = TRUE)
+
+tabla <- prop.table(table(datos), margin = 1)
+plot <- as.data.frame(tabla) %>% filter(!iden_pro == "Otro, cual") %>% filter(!iden_hijoa == "Otro, cual") %>% 
+  ggplot(aes(x = iden_hijoa, y = round(Freq, 2), fill = iden_hijoa)) + geom_bar(stat="identity") + facet_grid(iden_pro~.) +
+  labs(title = "Identificación étnica de l@s hij@s de acuerdo a la de sus padres", x = "Identidicación del hij@", y = "") + 
+  theme(legend.position = "none") + scale_y_continuous(label = percent) +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
+
+# Labels 
+labelR = "Identificación del padre"
+
+# Get the ggplot grob
+z <- ggplotGrob(plot)
+
+# Get the positions of the strips in the gtable: t = top, l = left, ...
+posR <- subset(z$layout, grepl("strip-r", name), select = t:r)
+
+# Add a new column to the right of current right strips, 
+width <- z$widths[max(posR$r)]    # width of current right strips
+
+z <- gtable_add_cols(z, width, max(posR$r))
+
+# Construct the new strip grobs
+stripR <- gTree(name = "Strip_right", children = gList(
+  rectGrob(gp = gpar(col = NA, fill = "grey85")),
+  textGrob(labelR, rot = -90, gp = gpar(fontsize = 8.8, col = "grey10"))))
+
+# Position the grobs in the gtable
+z <- gtable_add_grob(z, stripR, t = min(posR$t), l = max(posR$r) + 1, b = max(posR$b), name = "strip-right")
+
+# Add small gaps between strips
+z <- gtable_add_cols(z, unit(1/5, "line"), max(posR$r))
+
+# Draw it
+grid.newpage()
+grid.draw(z)
+```
