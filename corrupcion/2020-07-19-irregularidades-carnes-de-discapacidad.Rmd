@@ -53,31 +53,27 @@ data <- select(discap, id_per:hablar, grado:tipo, carne:manuela) # solo reorgani
 ```
 
 ```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center', out.width='90%'}
-bin_default <- data %>% ggplot(aes(x = porcentaje)) + geom_histogram(fill = "white", col = "black") +
-  labs(y = "Frecuencia", title = "Número de discapacitados de acuerdo al % de discapacidad", x = "", subtitle = "30 barras") +
-  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
-
-bin1 <- data %>% ggplot(aes(x = porcentaje)) + geom_histogram(binwidth = 1, fill = "white", col = "black") +
-  labs(y = "Frecuencia", x = "Porcentaje de discapacidad", subtitle = "100 barritas") +
-  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
-
-library(gridExtra)
-grid.arrange(bin_default, bin1)
+data %>% ggplot(aes(x = porcentaje)) + geom_histogram(aes(y = stat(count) / sum(count)), binwidth = 1, fill = "white", col = "black") +
+  labs(y = "Porcentaje de discapacitados", x = "Grado de discapacidad", title = "Porcentaje de discapacitado de acuerdo al grado de discapacidad") +
+  scale_y_continuous(labels=percent) +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic")) 
 ```
 
 ```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center', out.width='90%'}
-data %>% ggplot(aes(x = porcentaje)) + geom_histogram(binwidth = 1, fill = "white", col = "black") +
-  labs(y = "Frecuencia", x = "Porcentaje de discapacidad", title = "Número de discapacitados de acuerdo al % de discapacidad") +
+data %>% ggplot(aes(x = porcentaje)) + 
+  geom_histogram(aes(y = stat(count) / sum(count)), binwidth = 1, fill = "white", col = "black") +
+  scale_y_continuous(labels=percent) +
+  labs(y = "Porcentaje de discapacitados", x = "Grado de discapacidad", title = "Porcentaje de discapacitado de acuerdo al grado de discapacidad") +
   theme(plot.title = element_text(color="black", size=14, face="bold.italic")) + 
-  annotate("text", x = 32, y = 100, label = "bolditalic('30%: Se considera \n discapacitado \n (desde 2017) \n 60% de exone- \n ración')", 
-                  parse = TRUE, size = 2.8, hjust = 1) + 
-  annotate("text", x = 42, y = 270, label = "bolditalic('40%: Se considera \n discapacitado \n (hasta el 2017) \n 60% de exoneración')", 
+  annotate("text", x = 32, y = 0.03, label = "bolditalic('30%: Se considera \n discapacitado \n (desde 2017) \n 60% de exone- \n ración')", 
+           parse = TRUE, size = 2.8, hjust = 1) + 
+  annotate("text", x = 42, y = 0.08, label = "bolditalic('40%: Se considera \n discapacitado \n (hasta el 2017) \n 60% de exoneración')", 
            parse = TRUE, size = 2.8, hjust = 0) + 
-  annotate("text", x = 52, y = 180, label = "bolditalic('50%: 60% de \n exoneración')", 
+  annotate("text", x = 52, y = 0.055, label = "bolditalic('50%: 60% de \n exoneración')", 
            parse = TRUE, size = 2.8, hjust = 0) + 
-  annotate("text", x = 77, y = 160, label = "bolditalic('75%: 80% de \n exoneración')", 
+  annotate("text", x = 77, y = 0.045, label = "bolditalic('75%: 80% de \n exoneración')", 
            parse = TRUE, size = 2.8, hjust = 0) +
-  annotate("text", x = 87, y = 50, label = "bolditalic('85%: 100% de \n exoneración')", 
+  annotate("text", x = 87, y = 0.015, label = "bolditalic('85%: 100% de \n exoneración')", 
            parse = TRUE, size = 2.3, hjust = 0)
 ```
 
