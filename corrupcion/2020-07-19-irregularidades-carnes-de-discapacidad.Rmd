@@ -1,0 +1,85 @@
+---
+title: ¿Irregularidades en la emisión de carnés de discapacidad? ¿Qué cuentan los datos?
+author: Alonso Quijano
+date: '2020-07-19'
+---
+```{r include =FALSE}
+###############################################################
+####                   Descargar los datos                 ####
+###############################################################
+
+if(!require(readstata13)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+
+# Le damos un nombre al url
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/economia/2020-07-03-ecuatorianos-mas-altos-ganan-mas/1_BDD_ENS2018_f1_personas.dta.zip"
+# Creamos un directorio temporal
+td <- tempdir()
+# Creamos una carpeta temporal
+tf <- tempfile(tmpdir=td, fileext = ".zip")
+# Descargamos los datos en la carpeta temporal
+download.file(url,tf)
+
+# Obtenemos el nombre del archivo dentro del archivo zip, lo descomprimimos (unzip), obtenemos el nombre del 
+# parche, y finalmente lo cargamos
+personas.f.name <- unzip(tf, list=TRUE)$Name[1] # El archivo dta personas es el primero
+unzip(tf, files=personas.f.name, exdir=td, overwrite=TRUE)
+personas.f.path <- file.path(td, personas.f.name)
+personas <- read.dta13(personas.f.path)
+
+data.key.personas <- data.frame(variable = names(personas), 
+                              label = attr(personas,"var.labels"))
+
+###########################################################
+####                   Crear variables                 ####
+####                    Discapacidad                   ####
+###########################################################
+
+discap <- select(personas, id_per, id_hogar, f1_s2_10_1, f1_s2_10_2, f1_s2_10_3, 
+                 f1_s2_10_4, f1_s2_10_5, f1_s2_10_6, f1_s2_11, f1_s2_12, f1_s2_13) %>%
+  rename(visual = f1_s2_10_1, auditiva = f1_s2_10_2, motriz = f1_s2_10_3, 
+         cognitiva = f1_s2_10_4, banarse = f1_s2_10_5, hablar = f1_s2_10_6,
+         carne = f1_s2_11, porcentaje = f1_s2_12, manuela = f1_s2_13) %>% 
+  filter(carne == "si") %>% droplevels() %>% # Escogemos solo las peronas con carné de discapacidad
+  filter(porcentaje <= 100 & porcentaje >= 4) # Eliminamos errores
+
+discap[, c(3:8)] <- sapply(discap[, c(3:8)], as.numeric)
+discap$grado <- apply(discap[, c(3:8)], 1, function(x) max(x))
+
+set.seed(2525)
+discap$tipo <- colnames(discap[,3:8])[max.col(discap[, c(3:8)], ties.method="random")]
+
+data <- select(discap, id_per:hablar, grado:tipo, carne:manuela) # solo reorganizamos las columnas
+```
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center', out.width='90%'}
+bin_default <- data %>% ggplot(aes(x = porcentaje)) + geom_histogram(fill = "white", col = "black") +
+  labs(y = "Frecuencia", title = "Número de discapacitados de acuerdo al % de discapacidad", x = "", subtitle = "30 barras") +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
+
+bin1 <- data %>% ggplot(aes(x = porcentaje)) + geom_histogram(binwidth = 1, fill = "white", col = "black") +
+  labs(y = "Frecuencia", x = "Porcentaje de discapacidad", subtitle = "100 barritas") +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
+
+library(gridExtra)
+grid.arrange(bin_default, bin1)
+```
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center', out.width='90%'}
+data %>% ggplot(aes(x = porcentaje)) + geom_histogram(binwidth = 1, fill = "white", col = "black") +
+  labs(y = "Frecuencia", x = "Porcentaje de discapacidad", title = "Número de discapacitados de acuerdo al % de discapacidad") +
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic")) + 
+  annotate("text", x = 32, y = 100, label = "bolditalic('30%: Se considera \n discapacitado \n (desde 2017) \n 60% de exone- \n ración')", 
+                  parse = TRUE, size = 2.8, hjust = 1) + 
+  annotate("text", x = 42, y = 270, label = "bolditalic('40%: Se considera \n discapacitado \n (hasta el 2017) \n 60% de exoneración')", 
+           parse = TRUE, size = 2.8, hjust = 0) + 
+  annotate("text", x = 52, y = 180, label = "bolditalic('50%: 60% de \n exoneración')", 
+           parse = TRUE, size = 2.8, hjust = 0) + 
+  annotate("text", x = 77, y = 160, label = "bolditalic('75%: 80% de \n exoneración')", 
+           parse = TRUE, size = 2.8, hjust = 0) +
+  annotate("text", x = 87, y = 50, label = "bolditalic('85%: 100% de \n exoneración')", 
+           parse = TRUE, size = 2.3, hjust = 0)
+```
+
+
+
