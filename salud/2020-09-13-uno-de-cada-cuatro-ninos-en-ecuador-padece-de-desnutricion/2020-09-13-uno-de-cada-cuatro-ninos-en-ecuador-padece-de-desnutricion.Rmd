@@ -1,0 +1,336 @@
+---
+title: Uno de cada cuatro niños en el Ecuador padece de desnutrición
+author: "Alonso Quijano"
+date: "9/14/2020"
+output: html_document
+---
+
+```{r include =FALSE, echo = TRUE}
+###############################################################
+####                   Descargar los datos                 ####
+###############################################################
+
+if(!require(readstata13)) install.packages("readstata13", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(zscorer)) install.packages("zscorer", repos = "http://cran.us.r-project.org")
+if(!require(sf)) install.packages("sf", repos = "http://cran.us.r-project.org")
+if(!require(rmapshaper)) install.packages("rmapshaper", repos = "http://cran.us.r-project.org")
+if(!require(tmap)) install.packages("tmap", repos = "http://cran.us.r-project.org")
+if(!require(RColorBrewer)) install.packages("RColorBrewer", repos = "http://cran.us.r-project.org")
+if(!require(grid)) install.packages("grid", repos = "http://cran.us.r-project.org")
+if(!require(hrbrthemes)) install.packages("hrbrthemes", repos = "http://cran.us.r-project.org")
+if(!require(RColorBrewer)) install.packages("RColorBrewer", repos = "http://cran.us.r-project.org")
+
+# Base de datos de personas ----------
+# Le damos un nombre al url
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/economia/2020-07-03-ecuatorianos-mas-altos-ganan-mas/1_BDD_ENS2018_f1_personas.dta.zip"
+# Creamos un directorio temporal
+td <- tempdir()
+# Creamos una carpeta temporal
+tf <- tempfile(tmpdir=td, fileext = ".zip")
+# Descargamos los discap en la carpeta temporal
+download.file(url,tf)
+
+# Obtenemos el nombre del archivo dentro del archivo zip, lo descomprimimos (unzip), obtenemos el nombre del 
+# parche, y finalmente lo cargamos
+personas.f.name <- unzip(tf, list=TRUE)$Name[1] # El archivo dta personas es el primero
+unzip(tf, files=personas.f.name, exdir=td, overwrite=TRUE)
+personas.f.path <- file.path(td, personas.f.name)
+personas <- read.dta13(personas.f.path)
+
+data.key.personas <- data.frame(variable = names(personas), 
+                                label = attr(personas,"var.labels"))
+
+# Base de datos de hogares ----------
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-06-30-desnutricion-infantil-ecuador-ensanut/2_BDD_ENS2018_f1_hogar.dta.zip"
+# Creamos un directorio temporal
+td <- tempdir()
+# Creamos una carpeta temporal
+tf <- tempfile(tmpdir=td, fileext = ".zip")
+# Descargamos los discap en la carpeta temporal
+download.file(url,tf)
+
+# Obtenemos el nombre del archivo dentro del archivo zip, lo descomprimimos (unzip), obtenemos el nombre del 
+# parche, y finalmente lo cargamos
+hogar.f.name <- unzip(tf, list=TRUE)$Name[1] # El archivo dta personas es el primero
+unzip(tf, files=hogar.f.name, exdir=td, overwrite=TRUE)
+hogar.f.path <- file.path(td, hogar.f.name)
+hogar <- read.dta13(hogar.f.path)
+
+hogar.key.hogar <- data.frame(variable = names(hogar), 
+                              label = attr(hogar,"var.labels"))
+
+###########################################
+####              Estatura             ####
+###########################################
+
+#Estatura (siguiendo el codigo del INEC que esta en STATA)
+#Longitud o talla
+personas <- mutate(personas, talla1 = coalesce(f1_s7_5_1,f1_s7_6_1), 
+                   talla2 = coalesce(f1_s7_5_2,f1_s7_6_2),
+                   talla3 = coalesce(f1_s7_5_3, f1_s7_6_3))
+
+#Diferencias en las medidas
+personas <- personas %>%
+  mutate(d1=abs(talla1-talla2), d2=abs(talla1-talla3), d3=abs(talla2-talla3))
+
+#La minima dsitancia en las medidas
+personas <- personas %>% mutate(dmin = min(d1,d2,d3))
+
+#Promedio entre talla1 y talla2 si su dif <0.5, sino la mínima diferencia determina de qué medidas se hace el promedio
+personas <- personas %>% 
+  mutate(estatura = case_when(d1 <= 0.5 ~ (talla1+talla2)/2,
+                              dmin==d3 ~ (talla2+talla3)/2,
+                              dmin==d2 ~ (talla1+talla3)/2,
+                              TRUE ~ (talla1+talla2)/2))
+
+#######################################
+####              Peso             ####
+#######################################
+
+personas <- personas %>% mutate(peso1 = f1_s7_4_1,
+                                peso2 = f1_s7_4_2,
+                                peso3 = f1_s7_4_3)
+
+#Diferencias en las medidas
+personas <- personas %>% mutate(d1 = abs(peso1 - peso2),
+                                d2 = abs(peso1 - peso3),
+                                d3 = abs(peso2 - peso3))
+
+#La mínima dsitancia en las medidas
+personas <- personas %>% mutate(dmin = min(d1,d2,d3))
+
+#Promedio entre peso1 y peso2 si su dif <0.5, sino la mínima diferencia determina de qué medidas se hace el promedio
+personas <- personas %>% 
+  mutate(peso = case_when(d1 <= 0.5 ~ (peso1+peso2)/2,
+                          dmin==d3 ~ (peso2+peso3)/2,
+                          dmin==d2 ~ (peso1+peso3)/2,
+                          TRUE ~ (peso1+peso2)/2))
+
+####################################################
+####              Weight for height             ####
+####################################################
+
+personas$sexo_binario <- as.numeric(personas$sexo) # 1 para hombre, 2 para mujer
+
+# Los indicadores de nutrición se calculan a niños de hasta 5 años, entonces remplazamos los datos calculados a mayores
+# de 5 años por NAs.
+personas <- personas %>% filter(edadanios <= 5)
+
+data <- 
+  personas %>% filter(edadanios <= 5) %>% 
+  select(id_per, id_hogar, sexo, sexo_binario, edadanios, edadmeses, edaddias, 
+         prov, area, etnia, estatura, peso, f1_s4_41) %>% rename(preventiva = f1_s4_41)
+
+# Weight for height (peso para estatura)
+wfh <- addWGSR(data = data, sex = "sexo_binario", firstPart = "peso",
+                    secondPart = "estatura", index = "wfh" ) %>% select(id_per, wfhz)
+
+# Height for age (estatura para edad)
+hfa <- addWGSR(data = data, sex = "sexo_binario", firstPart = "estatura",
+               secondPart = "edaddias", index = "hfa" ) %>% select(id_per, hfaz)
+
+# Weight for age (peso para edad)
+wfa <- addWGSR(data = data, sex = "sexo_binario", firstPart = "peso",
+               secondPart = "edaddias", index = "wfa" ) %>% select(id_per, wfaz)
+
+data <- left_join(data, wfh, by = "id_per") %>% left_join(hfa, by = "id_per") %>% left_join(wfa, by = "id_per") 
+
+# Si el niño tiene un valor de -2 en cualquiera de las tres medidas antropométricas, se lo puede clasificar como
+# baja talla, bajo peso y meaciado
+# Puedes revisar este manual de la OMS para interpretar mejor los datos https://www.who.int/childgrowth/training/c_interpretando.pdf
+
+data <- data %>% mutate(emaciado = ifelse(wfhz < -2, "si", "no"),
+                         baja_talla = ifelse(hfaz < -2, "si", "no"),
+                         bajo_peso = ifelse(wfaz < -2, "si", "no"))
+
+#################################################################################
+####              Niños que no desayunaron, almorzaron o cenaron             ####
+#################################################################################
+
+missed_meals <- hogar %>% select(id_hogar, f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, 
+                                 f1_s6_2_5, f1_s6_2_6, f1_s6_2_7, f1_s6_2_8)
+head(missed_meals)
+ninetoNA <- function(x){ # Creamos una variable para cambiar los 9 por ceros
+  x = ifelse(x == 9, NA, x)
+  return(x)
+}
+
+sino <- function(x){ # Creamos una variable para cambiar 1 por "si"
+  x = ifelse(x == 1, "si", "no")
+  x = factor(x, levels = c("si", "no"))
+  return(x)
+}
+
+missed_meals[, c(2:9)] <- lapply(missed_meals[, c(2:9)], FUN = ninetoNA)
+missed_meals[, c(2:9)] <- lapply(missed_meals[, c(2:9)], FUN = sino)
+
+data <- left_join(data, missed_meals, by = "id_hogar")
+
+```
+
+```{r, include = FALSE, echo=TRUE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center'}
+#############################################################
+####              Desnutrición por provincia             ####
+#############################################################
+class(data$prov)
+provincia <- data.frame(cod_prov = factor(c(1:24, 90)), provincia = c("Azuay", "Bolivar", "Cañar", "Carchi", "Cotopaxi", "Chimborazo", "El Oro",
+                        "Esmeraldas", "Guayas", "Imbabura", "Loja", "Los Rios", "Manabi", "Morona Santiago", "Napo", 
+                        "Pastaza", "Pichincha", "Tungurahua", "Zamora Chinchipe", "Galápagos", "Sucumbios", "Orellana", 
+                        "Santo Domingo de los Tsáchilas", "Santa Elena", "Zona no delimitada"))
+
+data <- data %>% mutate(prov = as.factor(as.numeric(prov))) %>% 
+  inner_join(provincia, by = c("prov" = "cod_prov"))
+
+desnutricion_prov <- data %>% group_by(provincia) %>% summarize(desnutricion = mean(baja_talla == "si", na.rm = TRUE))
+
+##############################################################################
+####              Mapa de desnutrición (baja talla para peso)             ####
+##############################################################################
+
+# Now, we need to load Ecuador's administrative division by province
+url <- "https://github.com/aquijanoruiz/elquantificador_posts/raw/master/salud/2020-03-22-mapa-del-coronavirus-en-el-ecuador/ECU_PROVINCE_SHAPEFILE.zip"
+td <- tempdir() # We create a temporary directory
+tf <- tempfile(tmpdir=td, fileext = ".zip") # We create the placeholder file
+download.file(url,tf) # We download the data into the placeholder file
+
+# We get the name of the file inside the zip file that contains the demographic data, 
+# unzip it, get the full path name of it, and finally load it
+shp.file.name <- unzip(tf, list=TRUE)$Name[4] # The shp file name
+shx.file.name <- unzip(tf, list=TRUE)$Name[6] # The shx file name
+dbf.fine.name <- unzip(tf, list=TRUE)$Name[8] # The dbf file name
+prf.fine.name <- unzip(tf, list=TRUE)$Name[10] # The prf file name
+
+unzip(tf, files=c(shp.file.name, shx.file.name, dbf.fine.name, prf.fine.name), exdir=td, overwrite=TRUE)
+shp.file.path <- file.path(td, shp.file.name)
+
+ecu_map <- st_read(shp.file.path) # Now we have loaded the shapefile
+
+# We simplify the map polygon data
+ecu_map <- ms_simplify(ecu_map, keep=0.01) # We keep the 0.4% of the polygon
+
+# We keep only the variables we need
+ecu_map <- ecu_map %>% select(-c(ID_0, ISO, NAME_0, ID_1, TYPE_1, ENGTYPE_1, NL_NAME_1, VARNAME_1)) %>%
+  rename(Provincia = NAME_1) # We only keep the province names and the geometry
+
+desnutricion_prov$provincia <- factor(desnutricion_prov$provincia, levels = levels(ecu_map$Provincia)) # Coverting provincia into factor
+desnutricion_prov <- inner_join(ecu_map, desnutricion_prov, by = c("Provincia" = "provincia"))
+
+desnutricion_prov$Provincia <- 
+  plyr::revalue(desnutricion_prov$Provincia, c("Santo Domingo de los Tsáchilas" = "Sto Dom Tsáchilas", 
+                                            "Manabi" = "Manabí"))
+
+# Porcentajes ---------
+desnutricion_prov <- desnutricion_prov %>% mutate(porc_desnutricion = desnutricion * 100)
+
+desnutricion_prov <- desnutricion_prov %>% mutate(porc_desnutricion = as.character(paste0(formatC(desnutricion_prov$porc_desnutricion,
+                                                                              format = "f", digits = 1), " %")))
+# porc_comp ---------
+
+desnutricion_prov_map <- # Continental Ecuador
+  tm_shape(desnutricion_prov %>% filter(!Provincia == "Galápagos")) + tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_fill(col = "desnutricion", palette = "Blues", style = "cont",
+          legend.format = list(fun=function(x) paste0(formatC(x * 100, digits=0, format="f"), " %")), 
+          title = "",legend.show = TRUE) + 
+  tm_layout(main.title = "Retraso en el crecimiento de menores \n de cinco años", legend.position = c("right","bottom"), fontface = "bold.italic",
+            main.title.size = 1.5) +
+  tm_text("porc_desnutricion", size = 0.6, alpha = 0.5, just = "bottom") + # We add the number of cases
+  tm_shape(desnutricion_prov) +
+  tm_fill(col = "desnutricion", palette = "Blues", legend.format = list(digits = 0), 
+          legend.show = FALSE, alpha = 0) + 
+  tm_text("Provincia", size = 0.4, alpha = 0.6, just = "top") + # We add the pronvince names
+  tm_layout(frame = F)
+
+desnutricion_prov_map_gal <- # Galapagos
+  tm_shape(desnutricion_prov %>% filter(Provincia == "Galápagos")) + tm_borders(col = "grey25", lwd = 1, alpha = 0.4) +
+  tm_shape(desnutricion_prov) +
+  tm_fill(col = "desnutricion", palette = "Blues", style = "cont",
+          legend.format = list(fun=function(x) paste0(formatC(x * 100, digits=0, format="f"), " %")), 
+          title = "",legend.show = FALSE) + 
+  tm_layout(fontface = "bold.italic") +
+  tm_text("porc_desnutricion", size = 0.6, alpha = 0.5, just = "bottom") + # We add the number of cases
+  tm_shape(desnutricion_prov) +
+  tm_fill(col = "desnutricion", palette = "Blues", legend.format = list(digits = 0), 
+          legend.show = FALSE, alpha = 0) + 
+  tm_text("Provincia", size = 0.4, alpha = 0.6, just = "top") + # We add the pronvince names
+  tm_layout(frame = "white")
+```
+
+```{r, echo=TRUE, fig.align='center'}
+grid.newpage()
+print(desnutricion_prov_map, vp = viewport(x = 0.6, y = 0.5,
+                                          height = 0.9))
+print(desnutricion_prov_map_gal, vp = viewport(x = 0.20, y = 0.65,
+                                          height = 0.18))
+```
+
+```{r, echo=TRUE, message = FALSE, warning=FALSE, fig.pos= "h",fig.align='center', out.width='90%'}
+#####################################################
+####              Análisis y gráficos            ####
+#####################################################
+
+mean(data$baja_talla == "si", na.rm = TRUE) # un 24% tiene baja talla para edad
+mean(data$bajo_peso == "si", na.rm = TRUE) # un 5% tiene bajo peso para edad
+mean(data$emaciado == "si", na.rm = TRUE) # casi un 4% tiene bajo peso para talla
+
+data %>% filter(baja_talla == "si") %>% summarize(mean(area == "rural")) # El problema pare ser igual tanto en la zona rural como urbana 
+
+data %>% filter(baja_talla == "si") %>% summarize(mean(preventiva == "si")) # 17% recibió algún chequeo médico o algún servicio preventivo
+
+# Podemos ver que la mayoría de niños desnutridos son niños de un año
+data %>% filter(baja_talla == "si") %>% ggplot(aes(edadanios)) + geom_histogram()
+
+# Entre los niños con baja talla para edad vemos cuántos no han comido por falta de dinero
+
+trueORfalse <- function(x) {
+  x = ifelse(x == "si", TRUE, FALSE)
+  return(x)
+}
+
+missed_meals <- data
+missed_meals[,20:27] <- as.data.frame(lapply(missed_meals[,20:27], FUN = trueORfalse))
+
+# Seguridad alimentaria ----------
+# Baja talla para la edad
+
+missed_meals %>% filter(baja_talla == "si") %>% 
+  summarize_at(vars(f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, f1_s6_2_5, 
+                    f1_s6_2_6, f1_s6_2_7, f1_s6_2_8), mean, na.rm = TRUE) %>% gather(question, answer) %>% 
+  mutate(question_label = c("Dejó de tener una alimentación saludable", "No tuvo una alimentación variada", 
+                            "Dejó de desayunar, almorzar, o cenar", "Comió menos de lo que debía", 
+                            "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
+                            "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
+  ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
+  labs(title = "Seguridad alimentaria (baja talla para la edad)", x = "", y = "") + scale_x_continuous(label = percent) +
+  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
+  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
+
+# Bajo peso para la edad
+
+missed_meals %>% filter(bajo_peso == "si") %>% 
+  summarize_at(vars(f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, f1_s6_2_5, 
+                    f1_s6_2_6, f1_s6_2_7, f1_s6_2_8), mean, na.rm = TRUE) %>% gather(question, answer) %>% 
+  mutate(question_label = c("Dejó de tener una alimentación saludable", "No tuvo una alimentación variada", 
+                            "Dejó de desayunar, almorzar, o cenar", "Comió menos de lo que debía", 
+                            "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
+                            "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
+  ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
+  labs(title = "Seguridad alimentaria (bajo peso para la edad)", x = "", y = "") + scale_x_continuous(label = percent) +
+  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
+  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
+
+# Emaciado (bajo peso para la talla)
+
+missed_meals %>% filter(emaciado == "si") %>% 
+  summarize_at(vars(f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, f1_s6_2_5, 
+                    f1_s6_2_6, f1_s6_2_7, f1_s6_2_8), mean, na.rm = TRUE) %>% gather(question, answer) %>% 
+  mutate(question_label = c("Dejó de tener una alimentación saludable", "No tuvo una alimentación variada", 
+                            "Dejó de desayunar, almorzar, o cenar", "Comió menos de lo que debía", 
+                            "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
+                            "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
+  ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
+  labs(title = "Seguridad alimentaria (emaciado)", x = "", y = "") + scale_x_continuous(label = percent) +
+  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
+  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
+```
