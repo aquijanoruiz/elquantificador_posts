@@ -302,35 +302,7 @@ missed_meals %>% filter(baja_talla == "si") %>%
                             "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
                             "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
   ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
-  labs(title = "Seguridad alimentaria (baja talla para la edad)", x = "", y = "") + scale_x_continuous(label = percent) +
-  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
-  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
-
-# Bajo peso para la edad
-
-missed_meals %>% filter(bajo_peso == "si") %>% 
-  summarize_at(vars(f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, f1_s6_2_5, 
-                    f1_s6_2_6, f1_s6_2_7, f1_s6_2_8), mean, na.rm = TRUE) %>% gather(question, answer) %>% 
-  mutate(question_label = c("Dejó de tener una alimentación saludable", "No tuvo una alimentación variada", 
-                            "Dejó de desayunar, almorzar, o cenar", "Comió menos de lo que debía", 
-                            "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
-                            "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
-  ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
-  labs(title = "Seguridad alimentaria (bajo peso para la edad)", x = "", y = "") + scale_x_continuous(label = percent) +
-  theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
-  theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
-
-# Emaciado (bajo peso para la talla)
-
-missed_meals %>% filter(emaciado == "si") %>% 
-  summarize_at(vars(f1_s6_2_1, f1_s6_2_2, f1_s6_2_3, f1_s6_2_4, f1_s6_2_5, 
-                    f1_s6_2_6, f1_s6_2_7, f1_s6_2_8), mean, na.rm = TRUE) %>% gather(question, answer) %>% 
-  mutate(question_label = c("Dejó de tener una alimentación saludable", "No tuvo una alimentación variada", 
-                            "Dejó de desayunar, almorzar, o cenar", "Comió menos de lo que debía", 
-                            "Disminuyó la cantidad de comida", "Sintió hambre pero no comió", 
-                            "Solo comió una vez al día", "Dejó de comer durante todo el día")) %>%
-  ggplot(aes(x = answer, y = reorder(question_label, answer), fill = question_label)) + geom_bar(stat="identity") + 
-  labs(title = "Seguridad alimentaria (emaciado)", x = "", y = "") + scale_x_continuous(label = percent) +
+  labs(title = "En los últimos 12 meses en su hogar, algún menor \n de 18 años, alguna vez por falta de dinero \n u otros recursos:", x = "", y = "") + scale_x_continuous(label = percent) +
   theme_ipsum() + theme(legend.position = "none") + scale_fill_brewer(palette = "Spectral") + 
   theme(axis.text.y = element_text(size = 9), axis.text.x = element_text(size = 9), plot.title = element_text(size=16))
 ```
